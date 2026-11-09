@@ -1,0 +1,237 @@
+name: Build iOS IPA
+# Public build runner; game files + outputs live in the private repo (env.PRIV). Patches Greymeat's assemblies, converts its data for Metal/ASTC, builds an IL2CPP
+# Unity 6000.6.0f1 iOS player around them and publishes a fakesigned TrollStore IPA as release "ipa".
+on:
+  workflow_dispatch:
+    inputs:
+      skip_unity:
+        description: 'only patch + convert (no Unity/Xcode)'
+        default: 'false'
+      ref_only:
+        description: 'build the shell only and upload its Data (Metal reference)'
+        default: 'false'
+permissions: {contents: write}
+env:
+  PRIV: m7830380-cyber/greymeat-ios
+  UNITY_VERSION: 6000.6.0f1
+  UNITY_CHANGESET: f7f8ed4d1e24
+jobs:
+  ios:
+    if: github.actor == github.repository_owner
+    runs-on: ${{ inputs.skip_unity == 'true' && 'ubuntu-latest' || 'macos-15' }}
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: {dotnet-version: '8.0.x'}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+
+      - name: Game files
+        env: {GH_TOKEN: '${{ secrets.PRIVATE_REPO_TOKEN }}'}
+        run: |
+          set -e
+          gh release download src -R ${{ env.PRIV }} -p game.zip
+          unzip -q game.zip && rm game.zip
+          echo "GDATA=$PWD/Greymeat/Greymeat_Data" >> $GITHUB_ENV
+
+      - name: Build tools (HLSLcc, bc6hdec)
+        run: |
+          set -e
+          cmake -S tools/hlslcc_cli -B /tmp/hb -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS="-std=c++14 -w" -DCMAKE_POLICY_VERSION_MINIMUM=3.5 > /dev/null
+          cmake --build /tmp/hb -j 4 2>&1 | grep -E "error|warning: unused" | head -40 || true
+          ls -l /tmp/hb/hlslcc_cli
+          echo "HLSLCC_CLI=/tmp/hb/hlslcc_cli" >> $GITHUB_ENV
+          cmake -S tools/bc6hdec -B /tmp/bb -DCMAKE_BUILD_TYPE=Release > /dev/null && cmake --build /tmp/bb > /dev/null
+          echo "BC6HDEC_DLL=$(ls /tmp/bb/libbc6hdec.* | head -1)" >> $GITHUB_ENV
+
+      - name: Patch assemblies
+        run: |
+          set -e
+          dotnet build shim/GreyShim.csproj -c Release -p:ManagedDir="$GDATA/Managed" -o /tmp/shim 2>&1 | grep -E "error|Build succeeded" | head -30; test -f /tmp/shim/GreyShim.dll
+          mkdir -p shell/Assets/Plugins/Game
+          dotnet run --project tools/patcher/GreyPatcher.csproj -c Release -- patch "$GDATA/Managed" /tmp/shim/GreyShim.dll shell/Assets/Plugins/Game
+          ls shell/Assets/Plugins/Game
+
+      - name: Convert data (DX11 -> Metal, BC -> ASTC)
+        if: inputs.ref_only != 'true'
+        run: |
+          set -e
+          pip -q install UnityPy lz4 texture2ddecoder astc-encoder-py numpy
+          python tools/convert_data.py "$GDATA" /tmp/data
+          python - <<'EOF'
+          import json
+          r = json.load(open('/tmp/data_report.json'))
+          for f, v in r.items():
+              if not isinstance(v, dict): continue
+              for n, s in v.get('shaders', {}).items(): print(f, n, s)
+              for n, m in v.get('shader_msgs', {}).items(): print('MSG', n, m[:6])
+              for n, m in v.get('shader_errors', {}).items(): print('ERR', n, m[-600:])
+              if v.get('texture_errors'): print('TEXERR', f, v['texture_errors'][:10])
+          EOF
+          python - <<'EOF'
+          import UnityPy
+          UnityPy.config.FALLBACK_UNITY_VERSION='6000.6.0f1'
+          e = UnityPy.load('/tmp/data/globalgamemanagers')
+          for o in e.objects:
+              if o.type.name == 'PlayerSettings':
+                  t = o.read_typetree(check_read=False); cs = t.get('m_ActiveColorSpace')
+                  print('color space', cs)
+                  open('/tmp/cs', 'w').write('Linear' if cs == 1 else 'Gamma')
+          EOF
+          echo "COLOR_SPACE=$(cat /tmp/cs 2>/dev/null || echo Linear)" >> $GITHUB_ENV
+          ls -l /tmp/data
+          cd /tmp && zip -qr data.zip data data_report.json
+
+      - name: Upload converted data (private)
+        if: inputs.ref_only != 'true'
+        env: {GH_TOKEN: '${{ secrets.PRIVATE_REPO_TOKEN }}'}
+        run: gh release upload src /tmp/data.zip --clobber -R ${{ env.PRIV }}
+
+      - name: Select Xcode
+        if: inputs.skip_unity != 'true'
+        run: |
+          XC=$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -n 1)
+          sudo xcode-select -s "$XC"; xcodebuild -version
+
+      - name: Restore Unity
+        if: inputs.skip_unity != 'true'
+        id: uc
+        uses: actions/cache/restore@v4
+        with: {path: /Applications/Unity, key: 'unity-6000.6.0f1-ios-arm64-v1'}
+
+      - name: Install Unity
+        if: inputs.skip_unity != 'true' && steps.uc.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          BASE=https://download.unity3d.com/download_unity/$UNITY_CHANGESET
+          curl -fsSL --retry 3 -o /tmp/editor.pkg "$BASE/MacEditorInstallerArm64/Unity-$UNITY_VERSION.pkg" &
+          curl -fsSL --retry 3 -o /tmp/ios.pkg "$BASE/MacEditorTargetInstaller/UnitySetup-iOS-Support-for-Editor-$UNITY_VERSION.pkg" &
+          wait
+          sudo installer -pkg /tmp/editor.pkg -target / > /dev/null
+          sudo installer -pkg /tmp/ios.pkg -target / > /dev/null
+          rm -f /tmp/*.pkg
+          sudo chown -R "$(whoami)" /Applications/Unity
+
+      - name: Save Unity
+        if: inputs.skip_unity != 'true' && steps.uc.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with: {path: /Applications/Unity, key: 'unity-6000.6.0f1-ios-arm64-v1'}
+
+      - name: Activate Unity
+        if: inputs.skip_unity != 'true'
+        timeout-minutes: 12
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        run: |
+          set +e
+          chmod +x ci/unity.sh
+          SERIAL=$(printf '%s' "$UNITY_LICENSE" | python3 -c "import sys,re,base64; d=re.search(r'<DeveloperData Value=\"([^\"]+)\"',sys.stdin.read()).group(1); print(base64.b64decode(d)[4:].decode())")
+          [ -n "$SERIAL" ] || { echo "no serial in UNITY_LICENSE"; exit 1; }
+          echo "::add-mask::$SERIAL"
+          mkdir -p /tmp/activate-project
+          for d in "/Library/Application Support/Unity" "/Library/Application Support/Unity/licenses" "$HOME/Library/Unity/licenses"; do
+            sudo mkdir -p "$d"; sudo chown -R "$(whoami)" "$d"; sudo chmod -R 775 "$d"
+          done
+          mkdir -p "$HOME/Library/Unity/cache"
+          OK="License activated successfully|license is already valid and activated|Successfully activated"
+          for a in 1 2; do
+            ci/unity.sh /tmp/activate.log 300 "$OK" -quit -serial "$SERIAL" -username "$UNITY_EMAIL" -password "$UNITY_PASSWORD" -projectPath /tmp/activate-project
+            rc=$?; [ $rc = 0 ] && break; tail -n 40 /tmp/activate.log
+          done
+          exit $rc
+
+      - name: Unity build (Xcode project)
+        if: inputs.skip_unity != 'true'
+        timeout-minutes: 90
+        env:
+          SHELL_OUT: ${{ github.workspace }}/xcode
+        run: |
+          set +e
+          ci/unity.sh "$PWD/unity.log" 5100 "" -quit -projectPath "$PWD/shell" -buildTarget iOS -executeMethod IosShellBuild.Build
+          rc=$?
+          echo "---- errors"; grep -n -i -E "error|exception|failed" unity.log | grep -v -i warning | head -n 80
+          tail -n 60 unity.log
+          [ -f xcode/Unity-iPhone.xcodeproj/project.pbxproj ] || exit 1
+          exit $rc
+
+      - name: Upload shell reference data (private)
+        if: inputs.skip_unity != 'true'
+        env: {GH_TOKEN: '${{ secrets.PRIVATE_REPO_TOKEN }}'}
+        run: |
+          cd xcode && zip -qr ../shellref.zip Data && cd ..
+          gh release upload src shellref.zip --clobber -R ${{ env.PRIV }}
+
+      - name: Return Unity license
+        if: always() && inputs.skip_unity != 'true'
+        timeout-minutes: 4
+        env:
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        run: |
+          ls -d /Applications/Unity/Unity.app /Applications/Unity/*/Unity.app >/dev/null 2>&1 || exit 0
+          ci/unity.sh /tmp/return.log 150 "" -quit -returnlicense -username "$UNITY_EMAIL" -password "$UNITY_PASSWORD" || true
+
+      - name: Swap in game data
+        if: inputs.skip_unity != 'true' && inputs.ref_only != 'true'
+        run: |
+          set -e
+          D=xcode/Data
+          ls $D
+          python3 - <<'EOF'
+          import json
+          # shell RuntimeInitializeOnLoads (has GreyShim + game entries found in plugins) + the retail entries
+          p='xcode/Data/RuntimeInitializeOnLoads.json'
+          sh=json.load(open(p)); rt=json.load(open('Greymeat/Greymeat_Data/RuntimeInitializeOnLoads.json'))
+          k=lambda e:(e['assemblyName'],e['className'],e['methodName'])
+          seen={k(e) for e in sh['root']}
+          for e in rt['root']:
+              if k(e) not in seen: sh['root'].append(e)
+          json.dump(sh,open(p,'w'))
+          print([e['className']+'.'+e['methodName'] for e in sh['root']])
+          EOF
+          rm -f $D/level* $D/sharedassets* $D/globalgamemanagers* $D/resources.*
+          cp -R /tmp/data/* $D/
+          ls -l $D $D/Resources
+
+      - name: Xcode build
+        if: inputs.skip_unity != 'true' && inputs.ref_only != 'true'
+        run: |
+          cd xcode
+          set +e
+          xcodebuild -project Unity-iPhone.xcodeproj -scheme Unity-iPhone -configuration Release -sdk iphoneos \
+            -derivedDataPath "$PWD/dd" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" DEVELOPMENT_TEAM="" \
+            build > xb.log 2>&1
+          rc=$?
+          grep -E "error:|Undefined symbol|\*\* BUILD" xb.log | head -n 80
+          tail -n 20 xb.log
+          exit $rc
+
+      - name: Fakesign + IPA
+        if: inputs.skip_unity != 'true' && inputs.ref_only != 'true'
+        run: |
+          set -euo pipefail
+          brew install ldid > /dev/null
+          APP="$(find xcode/dd -name '*.app' -path '*Release-iphoneos*' | head -n 1)"
+          rm -rf Payload && mkdir Payload && cp -R "$APP" Payload/
+          APP="Payload/$(basename "$APP")"
+          find "$APP" -name '*.a' -delete
+          printf '%s\n' '<?xml version="1.0" encoding="UTF-8"?>' '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' \
+            '<plist version="1.0"><dict>' '<key>application-identifier</key><string>com.greymeat.iosport</string>' \
+            '<key>com.apple.developer.kernel.increased-memory-limit</key><true/>' '<key>com.apple.developer.kernel.extended-virtual-addressing</key><true/>' \
+            '<key>get-task-allow</key><true/>' '</dict></plist>' > ent.plist
+          for fw in "$APP"/Frameworks/*.framework; do [ -d "$fw" ] && ldid -S "$fw/$(basename "$fw" .framework)"; done
+          EXE=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Info.plist")
+          ldid -Sent.plist "$APP/$EXE"
+          zip -qry Greymeat.ipa Payload
+          ls -lh Greymeat.ipa
+
+      - name: Publish (private release)
+        if: inputs.skip_unity != 'true' && inputs.ref_only != 'true'
+        env: {GH_TOKEN: '${{ secrets.PRIVATE_REPO_TOKEN }}'}
+        run: |
+          gh release view ipa -R ${{ env.PRIV }} > /dev/null 2>&1 || gh release create ipa -R ${{ env.PRIV }} --title "Greymeat iOS" --notes "TrollStore IPA" --prerelease
+          gh release upload ipa Greymeat.ipa --clobber -R ${{ env.PRIV }}
+          gh release edit ipa -R ${{ env.PRIV }} --notes "Mobile port by piece89 (Discord). Run ${{ github.run_number }} (${{ github.sha }})"

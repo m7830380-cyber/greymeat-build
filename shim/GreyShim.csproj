@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <AssemblyName>GreyShim</AssemblyName>
+    <RootNamespace>GreyShim</RootNamespace>
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="UnityEngine.CoreModule"><HintPath>$(ManagedDir)/UnityEngine.CoreModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.InputLegacyModule"><HintPath>$(ManagedDir)/UnityEngine.InputLegacyModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.IMGUIModule"><HintPath>$(ManagedDir)/UnityEngine.IMGUIModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.TextRenderingModule"><HintPath>$(ManagedDir)/UnityEngine.TextRenderingModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.ScriptingModule" Condition="Exists('$(ManagedDir)/UnityEngine.ScriptingModule.dll')"><HintPath>$(ManagedDir)/UnityEngine.ScriptingModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.PropertiesModule" Condition="Exists('$(ManagedDir)/UnityEngine.PropertiesModule.dll')"><HintPath>$(ManagedDir)/UnityEngine.PropertiesModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.HierarchyCoreModule" Condition="Exists('$(ManagedDir)/UnityEngine.HierarchyCoreModule.dll')"><HintPath>$(ManagedDir)/UnityEngine.HierarchyCoreModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.MarshallingModule" Condition="Exists('$(ManagedDir)/UnityEngine.MarshallingModule.dll')"><HintPath>$(ManagedDir)/UnityEngine.MarshallingModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.SharedInternalsModule" Condition="Exists('$(ManagedDir)/UnityEngine.SharedInternalsModule.dll')"><HintPath>$(ManagedDir)/UnityEngine.SharedInternalsModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Unity.Scripting" Condition="Exists('$(ManagedDir)/Unity.Scripting.dll')"><HintPath>$(ManagedDir)/Unity.Scripting.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+</Project>

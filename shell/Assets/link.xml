@@ -1,0 +1,12 @@
+<linker>
+  <assembly fullname="Assembly-CSharp" preserve="all"/>
+  <assembly fullname="Greymeat.ModApi" preserve="all"/>
+  <assembly fullname="com.rlabrecque.steamworks.net" preserve="all"/>
+  <assembly fullname="GreyShim" preserve="all"/>
+  <assembly fullname="UnityEngine.IMGUIModule" preserve="all"/>
+  <assembly fullname="UnityEngine.TextRenderingModule" preserve="all"/>
+  <assembly fullname="UnityEngine.PhysicsModule" preserve="all"/>
+  <assembly fullname="UnityEngine.AnimationModule" preserve="all"/>
+  <assembly fullname="UnityEngine.AudioModule" preserve="all"/>
+  <assembly fullname="UnityEngine.CoreModule" preserve="all"/>
+</linker>
