@@ -16,7 +16,7 @@ B="$DST/build"
 if [ ! -d "$B/deploy" ]; then
   if [ "$(uname -m)" = arm64 ] && [ -d "$B/deploy_arm64" ]; then cp -R "$B/deploy_arm64" "$B/deploy"; elif [ -d "$B/deploy_x86_64" ]; then cp -R "$B/deploy_x86_64" "$B/deploy"; fi
 fi
-tools/hybridclr/prepare.sh "$SRC/libil2cpp" "$DST/libil2cpp"
+bash tools/hybridclr/prepare.sh "$SRC/libil2cpp" "$DST/libil2cpp"
 VER=$(python3 -c "import json;print(json.load(open('shell/Packages/com.code-philosophy.hybridclr/package.json'))['version'])")
 printf '%s' "$VER" > "$DST/libil2cpp/hybridclr/generated/libil2cpp-version.txt"
 echo "HYBRIDCLR=1" >> "${GITHUB_ENV:-/dev/null}"
