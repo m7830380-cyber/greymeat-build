@@ -106,6 +106,19 @@ namespace GreyShim
                 {
                     try
                     {
+                        Debug.Log("[Greymeat] control: " + Type.GetType("GreyShim.TouchPad, GreyShim"));
+                        foreach (var a in AppDomain.CurrentDomain.GetAssemblies())
+                        {
+                            string info;
+                            try
+                            {
+                                var ts = a.GetTypes();
+                                info = ts.Length + " types; " + string.Join(",", Array.ConvertAll(ts.Length > 6 ? new[] { ts[0], ts[1], ts[2], ts[ts.Length / 2], ts[ts.Length - 2], ts[ts.Length - 1] } : ts, x => x.FullName));
+                                if (a.GetName().Name == "Assembly-CSharp") info += " | GetType(Bootstrap)=" + a.GetType("Bootstrap") + " | find=" + Array.Find(ts, x => x.Name == "Bootstrap");
+                            }
+                            catch (Exception e) { info = "GetTypes failed: " + e.GetType().Name + " " + e.Message; }
+                            Debug.Log("[Greymeat] asm " + a.GetName().Name + ": " + info);
+                        }
                         var t = Type.GetType("Bootstrap, Assembly-CSharp");
                         var m = t?.GetMethod("Boot", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
                         Debug.Log($"[Greymeat] Bootstrap missing; type={t} boot={m}; invoking");
