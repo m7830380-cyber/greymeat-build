@@ -143,6 +143,10 @@ jobs:
           done
           exit $rc
 
+      - name: Install HybridCLR (mod DLL support)
+        if: inputs.skip_unity != 'true'
+        run: bash ci/hybridclr_install.sh iOS
+
       - name: Unity build (Xcode project)
         if: inputs.skip_unity != 'true'
         timeout-minutes: 90

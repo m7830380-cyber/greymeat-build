@@ -77,6 +77,8 @@ public static class AndroidShellBuild
         Debug.Log($"[AndroidShellBuild] {plugins} game assemblies");
 
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outApk)));
+        HybridSetup.Prebuild(ScenePath);   // mod DLL support (HybridCLR)
+
         var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
         {
             scenes = new[] { ScenePath },

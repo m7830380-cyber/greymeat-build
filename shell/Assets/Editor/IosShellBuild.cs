@@ -83,6 +83,8 @@ public static class IosShellBuild
         Debug.Log($"[IosShellBuild] {plugins} game assemblies");
         if (plugins == 0) Debug.LogWarning("[IosShellBuild] no game assemblies in Assets/Plugins/Game - building an empty shell");
 
+        HybridSetup.Prebuild(ScenePath);   // mod DLL support (HybridCLR)
+
         var opts = new BuildPlayerOptions
         {
             scenes = new[] { ScenePath },

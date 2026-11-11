@@ -9,7 +9,7 @@ UNITY="$(ls -d /Applications/Unity/Unity.app /Applications/Unity/*/Unity.app 2>/
 rm -f "$LOG"; touch "$LOG"
 "$UNITY" -batchmode -nographics -logFile "$LOG" "$@" &
 PID=$!
-tail -n +1 -f "$LOG" > >(grep --line-buffered -iE "licens|error|exception|\[IosShellBuild|build|compil|exiting|il2cpp" | cut -c1-300) &
+tail -n +1 -f "$LOG" > >(grep --line-buffered -iE "licens|error|exception|\[IosShellBuild|HybridSetup|HybridCLR|build|compil|exiting|il2cpp" | cut -c1-300) &
 TAILPID=$!
 start=$SECONDS; rc=""
 while kill -0 $PID 2>/dev/null; do

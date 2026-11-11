@@ -1,0 +1,134 @@
+diff --git a/hybridclr/interpreter/InterpreterUtil.h b/hybridclr/interpreter/InterpreterUtil.h
+index bd17424..08951db 100644
+--- a/hybridclr/interpreter/InterpreterUtil.h
++++ b/hybridclr/interpreter/InterpreterUtil.h
+@@ -1,4 +1,5 @@
+ #pragma once
++#include "il2cpp-config.h"
+ 
+ #if HYBRIDCLR_UNITY_2023_OR_NEW
+ #include "codegen/il2cpp-codegen.h"
+diff --git a/hybridclr/interpreter/MethodBridge.cpp b/hybridclr/interpreter/MethodBridge.cpp
+index 10cbd13..3b152d8 100644
+--- a/hybridclr/interpreter/MethodBridge.cpp
++++ b/hybridclr/interpreter/MethodBridge.cpp
+@@ -112,7 +112,7 @@ namespace interpreter
+ 		const Il2CppClass* underlyingGenericClass = il2cpp::vm::Class::FromIl2CppType(underlyingGenericType);
+ 		BuildValueTypeFullName(underlyingGenericClass, sigBuf, bufferSize, pos);
+ 		AppendString(sigBuf, bufferSize, pos, "<");
+-		const Il2CppGenericInst* classInst = type->data.generic_class->context.class_inst;
++		const Il2CppGenericInst* classInst = type->data.generic_class->class_inst;
+ 		for (uint32_t i = 0 ; i < classInst->type_argc; ++i)
+ 		{
+ 			if (i != 0)
+diff --git a/hybridclr/metadata/ClassFieldLayoutCalculator.cpp b/hybridclr/metadata/ClassFieldLayoutCalculator.cpp
+index e57ae11..b79c6c5 100644
+--- a/hybridclr/metadata/ClassFieldLayoutCalculator.cpp
++++ b/hybridclr/metadata/ClassFieldLayoutCalculator.cpp
+@@ -344,7 +344,8 @@ namespace metadata
+             return;
+         }
+ 
+-        const Il2CppGenericContext* gc = type->type == IL2CPP_TYPE_GENERICINST ? &type->data.generic_class->context : nullptr;
++        Il2CppGenericContext gcStorage = { type->type == IL2CPP_TYPE_GENERICINST ? type->data.generic_class->class_inst : nullptr, nullptr };
++        const Il2CppGenericContext* gc = type->type == IL2CPP_TYPE_GENERICINST ? &gcStorage : nullptr;
+         for (uint16_t i = 0; i < typeDef.field_count; i++)
+         {
+             FieldIndex fieldIndex = typeDef.fieldStart + i;
+diff --git a/hybridclr/metadata/Image.cpp b/hybridclr/metadata/Image.cpp
+index 4b86050..daa2f71 100644
+--- a/hybridclr/metadata/Image.cpp
++++ b/hybridclr/metadata/Image.cpp
+@@ -1228,7 +1228,7 @@ namespace metadata
+         // final genericContext = finalContainerType.class_inst + mri.instantiation
+         if (instantiation)
+         {
+-            const Il2CppGenericInst* finalClassIns = finalContainerType->type == IL2CPP_TYPE_GENERICINST ? finalContainerType->data.generic_class->context.class_inst : nullptr;
++            const Il2CppGenericInst* finalClassIns = finalContainerType->type == IL2CPP_TYPE_GENERICINST ? finalContainerType->data.generic_class->class_inst : nullptr;
+             const Il2CppGenericInst* finalMethodIns = instantiation;
+             Il2CppGenericContext finalGenericContext = { finalClassIns, finalMethodIns };
+             method = method->is_inflated ? method->genericMethod->methodDefinition : method;
+diff --git a/hybridclr/metadata/InterpreterImage.cpp b/hybridclr/metadata/InterpreterImage.cpp
+index d4fae39..cfa3600 100644
+--- a/hybridclr/metadata/InterpreterImage.cpp
++++ b/hybridclr/metadata/InterpreterImage.cpp
+@@ -132,6 +132,11 @@ namespace metadata
+ 		metadataImage->entryPointIndex = EncodeWithIndexExcept0(_rawImage->GetEntryPointToken());
+ 		metadataImage->exportedTypeStart = EncodeWithIndex(0);
+ 		metadataImage->image = image2;
++		metadataImage->invokerIndicesStart = 0;
++		metadataImage->rgctxRangesStart = 0;
++		metadataImage->rgctxRangesCount = 0;
++		metadataImage->staticConstructorStart = 0;
++		metadataImage->staticConstructorCount = 0;
+ 		image2->metadataHandle = reinterpret_cast<Il2CppMetadataImageHandle>(metadataImage);
+ #endif
+ 
+diff --git a/hybridclr/metadata/MetadataUtil.cpp b/hybridclr/metadata/MetadataUtil.cpp
+index c780e6d..6f15dd8 100644
+--- a/hybridclr/metadata/MetadataUtil.cpp
++++ b/hybridclr/metadata/MetadataUtil.cpp
+@@ -209,7 +209,7 @@ namespace metadata
+ 		if (IsGenericIns(containerType) /* && IsGenericIns(selfType)*/)
+ 		{
+ 			// TOTO memory leak
+-			return il2cpp::metadata::GenericMetadata::InflateIfNeeded(selfType, &containerType->data.generic_class->context, true);
++			return il2cpp::metadata::GenericMetadata::InflateIfNeeded(selfType, containerType->data.generic_class->class_inst, true);
+ 		}
+ 		else
+ 		{
+@@ -248,8 +248,8 @@ namespace metadata
+ 		}
+ 		case IL2CPP_TYPE_GENERICINST:
+ 		{
+-			const Il2CppGenericInst* i1 = t1->data.generic_class->context.class_inst;
+-			const Il2CppGenericInst* i2 = t2->data.generic_class->context.class_inst;
++			const Il2CppGenericInst* i1 = t1->data.generic_class->class_inst;
++			const Il2CppGenericInst* i2 = t2->data.generic_class->class_inst;
+ 
+ 			// this happens when maximum generic recursion is hit
+ 			if (i1 == NULL || i2 == NULL)
+@@ -389,8 +389,8 @@ namespace metadata
+ 		}
+ 		case IL2CPP_TYPE_GENERICINST:
+ 		{
+-			const Il2CppGenericInst* i1 = dstType->data.generic_class->context.class_inst;
+-			const Il2CppGenericInst* i2 = sigType->data.generic_class->context.class_inst;
++			const Il2CppGenericInst* i1 = dstType->data.generic_class->class_inst;
++			const Il2CppGenericInst* i2 = sigType->data.generic_class->class_inst;
+ 
+ 			// this happens when maximum generic recursion is hit
+ 			if (i1 == NULL || i2 == NULL)
+@@ -482,8 +482,8 @@ namespace metadata
+ 		}
+ 		case IL2CPP_TYPE_GENERICINST:
+ 		{
+-			const Il2CppGenericInst* i1 = dstType->data.generic_class->context.class_inst;
+-			const Il2CppGenericInst* i2 = sigType->data.generic_class->context.class_inst;
++			const Il2CppGenericInst* i1 = dstType->data.generic_class->class_inst;
++			const Il2CppGenericInst* i2 = sigType->data.generic_class->class_inst;
+ 
+ 			// this happens when maximum generic recursion is hit
+ 			if (i1 == NULL || i2 == NULL)
+@@ -789,7 +789,7 @@ namespace metadata
+ 		case IL2CPP_TYPE_GENERICINST:
+ 		{
+ 			Il2CppGenericClass* genericClass = type->data.generic_class;
+-			return HasNotInstantiatedGenericType(genericClass->context.class_inst);
++			return HasNotInstantiatedGenericType(genericClass->class_inst);
+ 		}
+ 		case IL2CPP_TYPE_VAR:
+         case IL2CPP_TYPE_MVAR:
+diff --git a/hybridclr/metadata/VTableSetup.cpp b/hybridclr/metadata/VTableSetup.cpp
+index d31ebe8..f293251 100644
+--- a/hybridclr/metadata/VTableSetup.cpp
++++ b/hybridclr/metadata/VTableSetup.cpp
+@@ -642,7 +642,7 @@ namespace metadata
+ 				const Il2CppGenericClass* genericClass = type->data.generic_class;
+ 				for (const MethodImpl& mi : explicitImpls)
+ 				{
+-					const Il2CppType* containerType = il2cpp::metadata::GenericMetadata::InflateIfNeeded(mi.declaration.containerType, &genericClass->context, true);
++					const Il2CppType* containerType = il2cpp::metadata::GenericMetadata::InflateIfNeeded(mi.declaration.containerType, genericClass->class_inst, true);
+ 					const Il2CppType* implType = TryInflateIfNeed(type, type->data.generic_class->type, mi.body.containerType);
+ 					ApplyExplicitOverride(implInterfaceOffsetIdxs, explicitImplToken2Slots, containerType,
+ 						mi.declaration.methodHandle, implType, mi.body.methodHandle);

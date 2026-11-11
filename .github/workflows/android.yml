@@ -127,6 +127,10 @@ jobs:
           done
           exit $rc
 
+      - name: Install HybridCLR (mod DLL support)
+        if: inputs.skip_unity != 'true'
+        run: bash ci/hybridclr_install.sh Android
+
       - name: Unity build (APK)
         timeout-minutes: 100
         env:
