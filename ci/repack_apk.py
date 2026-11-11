@@ -61,7 +61,7 @@ with zipfile.ZipFile(apk) as zi, zipfile.ZipFile(out, 'w') as zo:
             b = json.dumps(sh).encode()
             print('init:', [e['className'] + '.' + e['methodName'] for e in sh['root']])
         z = zipfile.ZipInfo(n, info.date_time)
-        z.compress_type = info.compress_type
+        z.compress_type = zipfile.ZIP_STORED if n.startswith('assets/aot/') else info.compress_type
         z.external_attr = info.external_attr
         zo.writestr(z, b)
     for n, p in sorted(new.items()):

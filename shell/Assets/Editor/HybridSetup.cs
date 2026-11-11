@@ -33,8 +33,32 @@ public static class HybridSetup
         string aot = (string)settingsType.GetField("outputAOTGenericReferenceFile").GetValue(inst);
         foreach (var f in new[] { Path.Combine(Application.dataPath, aot), Path.Combine(Application.dataPath, aot) + ".meta" })
             if (File.Exists(f)) { File.Delete(f); Debug.Log("[HybridSetup] removed " + f); }
+        CopyAotMetadata();
         AssetDatabase.Refresh();
         string mb = "HybridCLRData/LocalIl2CppData-" + Application.platform + "/il2cpp/libil2cpp/hybridclr/generated/MethodBridge.cpp";
         Debug.Log("[HybridSetup] GenerateAll done; MethodBridge " + (File.Exists(mb) ? new FileInfo(mb).Length + " bytes" : "MISSING"));
+    }
+
+    // Supplementary metadata for the interpreter: mod code that instantiates an AOT generic with new type
+    // arguments runs that generic's IL from these. GreyShim.AotMeta loads StreamingAssets/aot/*.bytes at boot.
+    static readonly string[] AotAssemblies = {
+        "mscorlib", "System", "System.Core", "UnityEngine.CoreModule", "UnityEngine.PhysicsModule",
+        "UnityEngine.IMGUIModule", "UnityEngine.AudioModule", "UnityEngine.AnimationModule",
+        "UnityEngine.ParticleSystemModule", "UnityEngine.TextRenderingModule", "UnityEngine.UIModule",
+        "UnityEngine.InputLegacyModule", "Assembly-CSharp", "Greymeat.ModApi",
+    };
+
+    static void CopyAotMetadata()
+    {
+        string src = "HybridCLRData/AssembliesPostIl2CppStrip/" + EditorUserBuildSettings.activeBuildTarget;
+        string dst = Path.Combine(Application.dataPath, "StreamingAssets/aot");
+        Directory.CreateDirectory(dst);
+        foreach (var n in AotAssemblies)
+        {
+            string f = Path.Combine(src, n + ".dll");
+            if (!File.Exists(f)) { Debug.LogWarning("[HybridSetup] AOT dll missing: " + f); continue; }
+            File.Copy(f, Path.Combine(dst, n + ".dll.bytes"), true);
+            Debug.Log("[HybridSetup] AOT metadata " + n + " " + new FileInfo(f).Length);
+        }
     }
 }
