@@ -86,6 +86,34 @@ namespace GreyShim
             s_I = go.AddComponent<TouchPad>();
             VInput.Virtual = OnDevice;
             Debug.Log($"[Greymeat-iOS] touch={OnDevice} screen={Screen.width}x{Screen.height} gpu={SystemInfo.graphicsDeviceName} api={SystemInfo.graphicsDeviceType}");
+            AppDomain.CurrentDomain.UnhandledException += (o, e) => Debug.LogError("[Greymeat] unhandled: " + e.ExceptionObject);
+            UnityEngine.SceneManagement.SceneManager.sceneLoaded += (sc, m) => Debug.Log($"[Greymeat] scene loaded: {sc.name} #{sc.buildIndex} roots={sc.rootCount}");
+            s_I.StartCoroutine(StartupCheck());
+        }
+
+        // Startup watchdog: logs where boot stands and, if the game's Bootstrap never appeared
+        // (its AfterSceneLoad hook did not run), starts it by reflection so the failure gets logged.
+        static System.Collections.IEnumerator StartupCheck()
+        {
+            for (int i = 0; i < 4; i++)
+            {
+                yield return new WaitForSecondsRealtime(2f);
+                var sc = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
+                bool boot = GameObject.Find("Bootstrap") != null;
+                Debug.Log($"[Greymeat] t={2 * (i + 1)}s scene={sc.name} loaded={sc.isLoaded} bootstrap={boot} frame={Time.frameCount}");
+                if (boot) yield break;
+                if (i == 1)
+                {
+                    try
+                    {
+                        var t = Type.GetType("Bootstrap, Assembly-CSharp");
+                        var m = t?.GetMethod("Boot", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
+                        Debug.Log($"[Greymeat] Bootstrap missing; type={t} boot={m}; invoking");
+                        m?.Invoke(null, null);
+                    }
+                    catch (Exception e) { Debug.LogError("[Greymeat] Bootstrap.Boot failed: " + e); }
+                }
+            }
         }
 
         void Add(string l, KeyCode k, int page, float x, float y, float r, Kind kind = Kind.Hold, int mouse = -1, int wheel = 0, Action tap = null)
