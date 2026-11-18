@@ -48,6 +48,7 @@ jobs:
           dotnet build shim/GreyShim.csproj -c Release -p:ManagedDir="$GDATA/Managed" -o /tmp/shim 2>&1 | grep -E "error|Build succeeded" | head -30; test -f /tmp/shim/GreyShim.dll
           mkdir -p shell/Assets/Plugins/Game
           dotnet run --project tools/patcher/GreyPatcher.csproj -c Release -- patch "$GDATA/Managed" /tmp/shim/GreyShim.dll shell/Assets/Plugins/Game
+          mkdir -p shell/Assets/StreamingAssets/maps && cp "$GDATA"/../Maps/*.gmmap shell/Assets/StreamingAssets/maps/ 2>/dev/null || true; ls shell/Assets/StreamingAssets/maps
 
       - name: Convert data (DX11 -> GLES3, BC -> ASTC)
         if: inputs.ref_only != 'true'

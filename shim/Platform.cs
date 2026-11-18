@@ -36,6 +36,40 @@ namespace GreyShim
         }
         public static Process[] GetProcessesByName(string name) => new Process[0];
 
+        /// Application.dataPath in game code: the game writes beside its Data folder (dataPath/../Maps, Replays,
+        /// Screenshots, Data/Resources/runtime.cache). On a phone that is the read-only app package, so the game
+        /// sees <persistentDataPath>/Data instead and those folders land in persistentDataPath (iOS: Documents).
+        static string s_DataPath;
+        public static string DataPath()
+        {
+            if (s_DataPath == null)
+            {
+                s_DataPath = System.IO.Path.Combine(Application.persistentDataPath, "Data");
+                try { System.IO.Directory.CreateDirectory(s_DataPath); } catch { }
+            }
+            return s_DataPath;
+        }
+
+        /// Maps shipped with the game (Greymeat/Maps, copied to StreamingAssets/maps by CI) -> persistentDataPath/Maps, once.
+        public static void InstallBundledMaps()
+        {
+            try
+            {
+                string dir = System.IO.Path.Combine(Application.persistentDataPath, "Maps");
+                System.IO.Directory.CreateDirectory(dir);
+                int n = 0;
+                foreach (var kv in Streaming.Files("maps", ".gmmap"))
+                {
+                    string f = System.IO.Path.Combine(dir, kv.Key);
+                    if (System.IO.File.Exists(f)) continue;
+                    System.IO.File.WriteAllBytes(f, kv.Value);
+                    n++;
+                }
+                if (n > 0) Debug.Log("[Greymeat] installed " + n + " bundled map(s)");
+            }
+            catch (Exception e) { Debug.LogWarning("[Greymeat] bundled maps not installed: " + e.Message); }
+        }
+
         public static Action BeforeQuit;
         public static void Quit()
         {

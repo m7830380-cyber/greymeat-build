@@ -87,6 +87,7 @@ namespace GreyShim
             VInput.Virtual = OnDevice;
             Debug.Log($"[Greymeat-iOS] touch={OnDevice} screen={Screen.width}x{Screen.height} gpu={SystemInfo.graphicsDeviceName} api={SystemInfo.graphicsDeviceType}");
             AppDomain.CurrentDomain.UnhandledException += (o, e) => Debug.LogError("[Greymeat] unhandled: " + e.ExceptionObject);
+            Platform.InstallBundledMaps();
             AotMeta.Load();   // HybridCLR: lets mod DLLs use AOT generics (List<T> of new T, LINQ, ...)
         }
 

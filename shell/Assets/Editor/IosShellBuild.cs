@@ -35,7 +35,7 @@ public static class IosShellBuild
         PlayerSettings.companyName = "Greymeat";
         PlayerSettings.productName = "Greymeat";
         PlayerSettings.SetApplicationIdentifier(Target, "com.greymeat.iosport");
-        PlayerSettings.bundleVersion = "1.3.4";
+        PlayerSettings.bundleVersion = "1.3.5";
         PlayerSettings.iOS.buildNumber = Environment.GetEnvironmentVariable("GITHUB_RUN_NUMBER") ?? "1";
         PlayerSettings.SetScriptingBackend(Target, ScriptingImplementation.IL2CPP);
         // link.xml keeps every game assembly whole; Minimal is the least stripping IL2CPP allows.
@@ -165,7 +165,7 @@ public static class IosShellBuild
         var root = plist.root;
         root.SetString("CFBundleDisplayName", "Greymeat");
         // Application.version on iOS is CFBundleShortVersionString: the game builds its Photon game version from it
-        root.SetString("CFBundleShortVersionString", "1.3.4");
+        root.SetString("CFBundleShortVersionString", "1.3.5");
         root.SetBoolean("UIFileSharingEnabled", true);           // Documents visible in Files / Filza
         root.SetBoolean("LSSupportsOpeningDocumentsInPlace", true);
         root.SetBoolean("UISupportsDocumentBrowser", true);

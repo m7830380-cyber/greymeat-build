@@ -30,7 +30,7 @@ namespace GreyShim
             try
             {
                 int ok = 0, n = 0;
-                foreach (var kv in Files())
+                foreach (var kv in Streaming.Files("aot", ".bytes"))
                 {
                     n++;
                     int err = HybridCLR.RuntimeApi.LoadMetadataForAOTAssembly(kv.Value, HybridCLR.HomologousImageMode.SuperSet);
@@ -40,18 +40,22 @@ namespace GreyShim
             }
             catch (Exception e) { Debug.LogWarning("[Greymeat] AOT metadata not loaded: " + e.GetType().Name + " " + e.Message); }
         }
+    }
 
-        static IEnumerable<KeyValuePair<string, byte[]>> Files()
+    /// Files shipped in StreamingAssets/<sub>: a folder on iOS, entries of the APK zip on Android.
+    static class Streaming
+    {
+        public static IEnumerable<KeyValuePair<string, byte[]>> Files(string sub, string ext)
         {
             if (Application.platform != RuntimePlatform.Android)
             {
-                string dir = Path.Combine(Application.streamingAssetsPath, "aot");
+                string dir = Path.Combine(Application.streamingAssetsPath, sub);
                 if (!Directory.Exists(dir)) yield break;
-                foreach (var f in Directory.GetFiles(dir, "*.bytes"))
+                foreach (var f in Directory.GetFiles(dir, "*" + ext))
                     yield return new KeyValuePair<string, byte[]>(Path.GetFileName(f), File.ReadAllBytes(f));
                 yield break;
             }
-            // Android: StreamingAssets live inside the APK (Application.dataPath); read assets/aot/* from the zip.
+            // Android: StreamingAssets live inside the APK (Application.dataPath); read assets/<sub>/* from the zip.
             using (var fs = new FileStream(Application.dataPath, FileMode.Open, FileAccess.Read))
             using (var br = new BinaryReader(fs))
             {
@@ -80,7 +84,7 @@ namespace GreyShim
                     long off = br.ReadUInt32();
                     string name = System.Text.Encoding.UTF8.GetString(br.ReadBytes(nl));
                     fs.Position += el + cl;
-                    if (name.StartsWith("assets/aot/") && name.EndsWith(".bytes")) hits.Add((name, method, csize, usize, off));
+                    if (name.StartsWith("assets/" + sub + "/") && name.EndsWith(ext)) hits.Add((name, method, csize, usize, off));
                 }
                 foreach (var h in hits)
                 {

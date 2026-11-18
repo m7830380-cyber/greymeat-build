@@ -365,6 +365,7 @@ static partial class Program
             n += RedirectStatic(c, screen, "get_fullScreen", "Platform", "GetFullScreen");
         }
         n += RedirectStatic(c, "UnityEngine.Application", "Quit", "Platform", "Quit");
+        n += RedirectStatic(c, "UnityEngine.Application", "get_dataPath", "Platform", "DataPath");
         n += RedirectStatic(c, "UnityEngine.Application", "set_targetFrameRate", "Platform", "SetTargetFrameRate");
         n += RedirectStatic(c, "UnityEngine.QualitySettings", "set_vSyncCount", "Platform", "SetVSyncCount");
         return n;
