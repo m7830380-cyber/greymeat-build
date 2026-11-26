@@ -1,5 +1,5 @@
 name: Build iOS IPA
-# Private repo only. Patches Greymeat's assemblies, converts its data for Metal/ASTC, builds an IL2CPP
+# Public build runner; game files + outputs live in the private repo (env.PRIV). Patches Greymeat's assemblies, converts its data for Metal/ASTC, builds an IL2CPP
 # Unity 6000.6.0f1 iOS player around them and publishes a fakesigned TrollStore IPA as release "ipa".
 on:
   workflow_dispatch:
@@ -12,10 +12,12 @@ on:
         default: 'false'
 permissions: {contents: write}
 env:
+  PRIV: m7830380-cyber/greymeat-ios
   UNITY_VERSION: 6000.6.0f1
   UNITY_CHANGESET: f7f8ed4d1e24
 jobs:
   ios:
+    if: github.actor == github.repository_owner
     runs-on: ${{ inputs.skip_unity == 'true' && 'ubuntu-latest' || 'macos-15' }}
     timeout-minutes: 180
     steps:
@@ -26,10 +28,10 @@ jobs:
         with: {python-version: '3.12'}
 
       - name: Game files
-        env: {GH_TOKEN: '${{ github.token }}'}
+        env: {GH_TOKEN: '${{ secrets.PRIVATE_REPO_TOKEN }}'}
         run: |
           set -e
-          gh release download src -R ${{ github.repository }} -p game.zip
+          gh release download src -R ${{ env.PRIV }} -p game.zip
           unzip -q game.zip && rm game.zip
           echo "GDATA=$PWD/Greymeat/Greymeat_Data" >> $GITHUB_ENV
 
@@ -85,8 +87,8 @@ jobs:
 
       - name: Upload converted data (private)
         if: inputs.ref_only != 'true'
-        env: {GH_TOKEN: '${{ github.token }}'}
-        run: gh release upload src /tmp/data.zip --clobber -R ${{ github.repository }}
+        env: {GH_TOKEN: '${{ secrets.PRIVATE_REPO_TOKEN }}'}
+        run: gh release upload src /tmp/data.zip --clobber -R ${{ env.PRIV }}
 
       - name: Select Xcode
         if: inputs.skip_unity != 'true'
@@ -143,6 +145,10 @@ jobs:
           done
           exit $rc
 
+      - name: Install HybridCLR (mod DLL support)
+        if: inputs.skip_unity != 'true'
+        run: bash ci/hybridclr_install.sh iOS
+
       - name: Unity build (Xcode project)
         if: inputs.skip_unity != 'true'
         timeout-minutes: 90
@@ -159,10 +165,10 @@ jobs:
 
       - name: Upload shell reference data (private)
         if: inputs.skip_unity != 'true'
-        env: {GH_TOKEN: '${{ github.token }}'}
+        env: {GH_TOKEN: '${{ secrets.PRIVATE_REPO_TOKEN }}'}
         run: |
           cd xcode && zip -qr ../shellref.zip Data && cd ..
-          gh release upload src shellref.zip --clobber -R ${{ github.repository }}
+          gh release upload src shellref.zip --clobber -R ${{ env.PRIV }}
 
       - name: Return Unity license
         if: always() && inputs.skip_unity != 'true'
@@ -230,8 +236,8 @@ jobs:
 
       - name: Publish (private release)
         if: inputs.skip_unity != 'true' && inputs.ref_only != 'true'
-        env: {GH_TOKEN: '${{ github.token }}'}
+        env: {GH_TOKEN: '${{ secrets.PRIVATE_REPO_TOKEN }}'}
         run: |
-          gh release view ipa -R ${{ github.repository }} > /dev/null 2>&1 || gh release create ipa -R ${{ github.repository }} --title "Greymeat iOS" --notes "TrollStore IPA" --prerelease
-          gh release upload ipa Greymeat.ipa --clobber -R ${{ github.repository }}
-          gh release edit ipa -R ${{ github.repository }} --notes "Mobile port by piece89 (Discord). Run ${{ github.run_number }} (${{ github.sha }})"
+          gh release view ipa -R ${{ env.PRIV }} > /dev/null 2>&1 || gh release create ipa -R ${{ env.PRIV }} --title "Greymeat iOS" --notes "TrollStore IPA" --prerelease
+          gh release upload ipa Greymeat.ipa --clobber -R ${{ env.PRIV }}
+          gh release edit ipa -R ${{ env.PRIV }} --notes "Mobile port by piece89 (Discord). Run ${{ github.run_number }} (${{ github.sha }})"
