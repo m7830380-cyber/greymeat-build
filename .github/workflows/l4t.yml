@@ -35,7 +35,11 @@ jobs:
           docker run --rm -v /tmp/bogo:/src -v /tmp/fallback:/out bogodroid-build bash -c '
             ldd /src/build-arm64/unityloader
             for l in $(ldd /src/build-arm64/unityloader | awk "/=>/{print \$3}"); do
-              case "$(basename $l)" in libSDL2*|libzip*|libbsd*|libmd*|libsndio*|libpulse*|libasound*|libXss*|libwayland*|libxkbcommon*|libdecor*|libdbus*|libsystemd*|liblzma*|libzstd*|libbz2*|libgcrypt*|libgpg-error*|liblz4*|libFLAC*|libogg*|libvorbis*|libsndfile*|libapparmor*|libX11-xcb*) cp -L "$l" /out/;; esac
+              case "$(basename $l)" in
+                # always on L4T (and must be the system/NVIDIA ones): glibc, gcc runtime, GL/EGL, X11/xcb/wayland, drm
+                libc.so*|libm.so*|libdl.so*|libpthread*|librt.so*|ld-linux*|libresolv*|libstdc++*|libgcc_s*|libEGL*|libGLES*|libGL.so*|libGLX*|libGLdispatch*|libOpenGL*|libX*|libxcb*|libwayland*|libdrm*|libgbm*|libxkbcommon*|libdecor*) ;;
+                *) cp -L "$l" /out/;;
+              esac
             done'
           ls /tmp/fallback
 
