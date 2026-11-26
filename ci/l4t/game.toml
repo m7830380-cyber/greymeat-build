@@ -1,0 +1,22 @@
+# Bogodroid NEO config for Greymeat on Switchroot L4T Ubuntu.
+[paths]
+game_files = "./gamedata/"          # Greymeat.apk + libc++_shared.so + tzdata
+android_files = "../conf/"          # saves, settings, Maps/Replays/Screenshots, mods (persistentDataPath)
+android_external_files = "../conf/"
+android_cache = "../cache/"
+
+[device]
+# no size given: fullscreen at the real screen size (720p handheld, the TV's mode docked)
+pause_on_focus_loss = false
+features = ["android.hardware.gamepad", "android.hardware.touchscreen"]
+
+[input]
+controller = true
+swap_ab = true            # Nintendo layout
+swap_xy = true
+back_button = "both"      # - / Select also acts as Escape (pause menu)
+escape_as_back = false
+touch = "auto"            # handheld touchscreen drives the on-screen buttons
+
+[audio]
+queue_bytes = 16384

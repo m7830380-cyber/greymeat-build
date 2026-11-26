@@ -1,0 +1,92 @@
+name: Build L4T (Switch Linux) package
+# Native ARM64 Linux build for Switchroot L4T Ubuntu: the Android APK's own arm64 Unity player (libunity/libil2cpp)
+# run on glibc by Bogodroid NEO's unityloader (EGL + GLES3 + SDL2, no Android, no emulation).
+# Needs release "apk" (android.yml) in the private repo; publishes Greymeat-L4T.tar.gz to its release "l4t".
+on:
+  workflow_dispatch:
+    inputs:
+      smoke_seconds:
+        description: 'seconds to run the game on a virtual screen as a test (0 = skip)'
+        default: '240'
+permissions: {contents: read}
+env:
+  PRIV: m7830380-cyber/greymeat-ios
+  BOGODROID_REPO: https://github.com/geoffwoollams/Bogodroid
+  BOGODROID_REF: e14de28
+  NDK: android-ndk-r27c   # = 27.2.12479018, the NDK the APK was built with
+jobs:
+  l4t:
+    if: github.actor == github.repository_owner
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build unityloader (Ubuntu 20.04 arm64 container, old glibc on purpose)
+        run: |
+          set -e
+          git clone -q --recursive "$BOGODROID_REPO" /tmp/bogo
+          cd /tmp/bogo && git checkout -q "$BOGODROID_REF" && git submodule update -q --init --recursive
+          git log -1 --format="bogodroid %h %cd %s"
+          ./build.sh
+          ls -l build-arm64/unityloader && file build-arm64/unityloader
+          # the libs it needs besides glibc / EGL / GLES (bundled as a fallback for L4T installs that lack them)
+          mkdir -p /tmp/fallback
+          docker run --rm -v /tmp/bogo:/src -v /tmp/fallback:/out bogodroid-build bash -c '
+            ldd /src/build-arm64/unityloader
+            for l in $(ldd /src/build-arm64/unityloader | awk "/=>/{print \$3}"); do
+              case "$(basename $l)" in libSDL2*|libzip*|libbsd*|libmd*|libsndio*|libpulse*|libasound*|libXss*|libwayland*|libxkbcommon*|libdecor*|libdbus*|libsystemd*|liblzma*|libzstd*|libbz2*|libgcrypt*|libgpg-error*|liblz4*|libFLAC*|libogg*|libvorbis*|libsndfile*|libapparmor*|libX11-xcb*) cp -L "$l" /out/;; esac
+            done'
+          ls /tmp/fallback
+
+      - name: APK + Android runtime bits
+        env: {GH_TOKEN: '${{ secrets.PRIVATE_REPO_TOKEN }}'}
+        run: |
+          set -e
+          P=/tmp/pkg/Greymeat-L4T; mkdir -p $P/gamedata/lib/arm64-v8a $P/gamedata/usr/share/zoneinfo $P/lib
+          cp /tmp/bogo/build-arm64/unityloader $P/
+          cp /tmp/bogo/LICENSE.md $P/BOGODROID-LICENSE.md
+          cp /tmp/fallback/* $P/lib/ 2>/dev/null || true
+          gh release download apk -R ${{ env.PRIV }} -p Greymeat.apk -D $P/gamedata
+          curl -fsSL --retry 3 -o /tmp/ndk.zip "https://dl.google.com/android/repository/$NDK-linux.zip"
+          unzip -q -j -o /tmp/ndk.zip "$NDK/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so" -d $P/gamedata/lib/arm64-v8a
+          rm /tmp/ndk.zip
+          python3 /tmp/bogo/tools/make_android_tzdata.py $P/gamedata/usr/share/zoneinfo/tzdata
+          cp ci/l4t/game.toml ci/l4t/Greymeat.sh ci/l4t/README.txt $P/
+          chmod +x $P/unityloader $P/Greymeat.sh
+          find $P -maxdepth 3 | sort
+
+      - name: Smoke test (virtual screen, Mesa GLES)
+        if: inputs.smoke_seconds != '0'
+        run: |
+          set +e
+          sudo apt-get -qq update && sudo apt-get -qq install -y xvfb libegl1 libgles2 libegl-mesa0 libgl1-mesa-dri imagemagick x11-utils > /dev/null
+          rm -rf /tmp/run && cp -r /tmp/pkg/Greymeat-L4T /tmp/run && cd /tmp/run
+          Xvfb :99 -screen 0 1280x720x24 & XPID=$!
+          sleep 2
+          export DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 SDL_VIDEODRIVER=x11
+          ./Greymeat.sh > run.txt 2>&1 & GPID=$!
+          T=${{ inputs.smoke_seconds }}
+          for s in $(seq 30 30 $T); do
+            sleep 30; kill -0 $GPID 2>/dev/null || { echo "exited after ~${s}s"; break; }
+            import -display :99 -window root /tmp/shot_${s}.png 2>/dev/null
+            echo "t=${s}s: $(grep -c . run.txt) log lines; last: $(tail -n 1 run.txt | cut -c1-200)"
+          done
+          kill $GPID 2>/dev/null; sleep 2; kill -9 $GPID 2>/dev/null; kill $XPID 2>/dev/null
+          echo "---- Greymeat lines"; grep -a -E "\[Greymeat|AOT metadata|HybridCLR" run.txt | head -40
+          echo "---- errors"; grep -a -i -E "error|exception|missing:|crash|abort" run.txt | grep -v -i warning | head -60
+          echo "---- tail"; tail -n 60 run.txt
+          mkdir -p /tmp/smoke && cp run.txt /tmp/smoke/ && cp /tmp/shot_*.png /tmp/smoke/ 2>/dev/null
+          ls /tmp/smoke
+          exit 0
+
+      - name: Publish (private release)
+        env: {GH_TOKEN: '${{ secrets.PRIVATE_REPO_TOKEN }}'}
+        run: |
+          set -e
+          cd /tmp/pkg && tar -czf /tmp/Greymeat-L4T.tar.gz Greymeat-L4T && ls -lh /tmp/Greymeat-L4T.tar.gz
+          F=/tmp/Greymeat-L4T.tar.gz
+          if [ -d /tmp/smoke ]; then (cd /tmp/smoke && zip -q /tmp/l4t-smoke.zip *) && F="$F /tmp/l4t-smoke.zip"; fi
+          gh release view l4t -R ${{ env.PRIV }} > /dev/null 2>&1 || gh release create l4t -R ${{ env.PRIV }} --title "Greymeat L4T (Switch Linux)" --notes "L4T" --prerelease
+          gh release upload l4t $F --clobber -R ${{ env.PRIV }}
+          gh release edit l4t -R ${{ env.PRIV }} --notes "Mobile port by piece89 (Discord). Native arm64 for Switchroot L4T Ubuntu (Bogodroid NEO $BOGODROID_REF). Run ${{ github.run_number }} (${{ github.sha }})"
