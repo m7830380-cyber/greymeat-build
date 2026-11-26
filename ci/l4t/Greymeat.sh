@@ -5,7 +5,9 @@ mkdir -p conf cache support_files
 # Unity reads the CPU layout through these; without them it sees a single core
 cat /sys/devices/system/cpu/present  > support_files/cpu_present.txt  2>/dev/null
 cat /sys/devices/system/cpu/possible > support_files/cpu_possible.txt 2>/dev/null
-# use the bundled SDL2/libzip/libbsd only if the system doesn't have them
+# SDL 2.30 is always the bundled one (EGL on X11, Joy-Con / Pro Controller drivers)
+export LD_LIBRARY_PATH="$PWD/lib/sdl${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+# the other bundled libs (libzip, libbsd, ...) only if the system doesn't have them
 if ldd ./unityloader | grep -q "not found"; then
   export LD_LIBRARY_PATH="$PWD/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
   ldd ./unityloader | grep "not found" && echo "missing libraries above: sudo apt install libsdl2-2.0-0 libzip-dev libbsd0"

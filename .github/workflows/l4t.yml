@@ -37,11 +37,26 @@ jobs:
             for l in $(ldd /src/build-arm64/unityloader | awk "/=>/{print \$3}"); do
               case "$(basename $l)" in
                 # always on L4T (and must be the system/NVIDIA ones): glibc, gcc runtime, GL/EGL, X11/xcb/wayland, drm
-                libc.so*|libm.so*|libdl.so*|libpthread*|librt.so*|ld-linux*|libresolv*|libstdc++*|libgcc_s*|libEGL*|libGLES*|libGL.so*|libGLX*|libGLdispatch*|libOpenGL*|libX*|libxcb*|libwayland*|libdrm*|libgbm*|libxkbcommon*|libdecor*) ;;
+                libc.so*|libm.so*|libdl.so*|libpthread*|librt.so*|ld-linux*|libresolv*|libstdc++*|libgcc_s*|libEGL*|libGLES*|libGL.so*|libGLX*|libGLdispatch*|libOpenGL*|libX*|libxcb*|libwayland*|libdrm*|libgbm*|libxkbcommon*|libdecor*|libSDL2*) ;;
                 *) cp -L "$l" /out/;;
               esac
             done'
           ls /tmp/fallback
+
+      - name: Build SDL 2.30 (same container; 20.04's SDL 2.0.10 makes a GLX context on X11, Unity needs EGL)
+        run: |
+          set -e
+          mkdir -p /tmp/sdl
+          docker run --rm -v /tmp/sdl:/out bogodroid-build bash -c '
+            set -e
+            apt-get -qq update > /dev/null
+            DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxinerama-dev libxss-dev libxfixes-dev libxkbcommon-dev libwayland-dev wayland-protocols libpulse-dev libasound2-dev libudev-dev libdbus-1-dev libegl-dev libgles-dev libdrm-dev libgbm-dev > /dev/null
+            curl -fsSL https://github.com/libsdl-org/SDL/releases/download/release-2.30.9/SDL2-2.30.9.tar.gz | tar -xz -C /tmp
+            cmake -S /tmp/SDL2-2.30.9 -B /tmp/sb -DCMAKE_BUILD_TYPE=Release -DSDL_STATIC=OFF -DSDL_TEST=OFF -DSDL_X11=ON -DSDL_WAYLAND=ON -DSDL_KMSDRM=ON -DSDL_PULSEAUDIO=ON -DSDL_ALSA=ON -DSDL_PIPEWIRE=OFF -DSDL_HIDAPI=ON > /dev/null
+            cmake --build /tmp/sb -j$(nproc) > /dev/null
+            cp -L /tmp/sb/libSDL2-2.0.so.0 /out/
+            ldd /out/libSDL2-2.0.so.0'
+          ls -l /tmp/sdl
 
       - name: APK + Android runtime bits
         env: {GH_TOKEN: '${{ secrets.PRIVATE_REPO_TOKEN }}'}
@@ -51,6 +66,7 @@ jobs:
           cp /tmp/bogo/build-arm64/unityloader $P/
           cp /tmp/bogo/LICENSE.md $P/BOGODROID-LICENSE.md
           cp /tmp/fallback/* $P/lib/ 2>/dev/null || true
+          mkdir -p $P/lib/sdl && cp /tmp/sdl/libSDL2-2.0.so.0 $P/lib/sdl/
           gh release download apk -R ${{ env.PRIV }} -p Greymeat.apk -D $P/gamedata
           curl -fsSL --retry 3 -o /tmp/ndk.zip "https://dl.google.com/android/repository/$NDK-linux.zip"
           unzip -q -j -o /tmp/ndk.zip "$NDK/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so" -d $P/gamedata/lib/arm64-v8a
