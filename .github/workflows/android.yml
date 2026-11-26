@@ -1,5 +1,5 @@
 name: Build Android APK
-# Public build runner; game files + outputs live in the private repo (env.PRIV). Same pipeline as ios.yml, for an IL2CPP arm64 OpenGL ES 3 APK (release "apk").
+# Private repo only. Same pipeline as ios.yml, for an IL2CPP arm64 OpenGL ES 3 APK (release "apk").
 on:
   workflow_dispatch:
     inputs:
@@ -8,13 +8,11 @@ on:
         default: 'false'
 permissions: {contents: write}
 env:
-  PRIV: m7830380-cyber/greymeat-ios
   UNITY_VERSION: 6000.6.0f1
   UNITY_CHANGESET: f7f8ed4d1e24
   NDK_VERSION: 27.2.12479018
 jobs:
   android:
-    if: github.actor == github.repository_owner
     runs-on: macos-15
     timeout-minutes: 180
     steps:
@@ -25,10 +23,10 @@ jobs:
         with: {python-version: '3.12'}
 
       - name: Game files
-        env: {GH_TOKEN: '${{ secrets.PRIVATE_REPO_TOKEN }}'}
+        env: {GH_TOKEN: '${{ github.token }}'}
         run: |
           set -e
-          gh release download src -R ${{ env.PRIV }} -p game.zip
+          gh release download src -R ${{ github.repository }} -p game.zip
           unzip -q game.zip && rm game.zip
           echo "GDATA=$PWD/Greymeat/Greymeat_Data" >> $GITHUB_ENV
 
@@ -49,6 +47,7 @@ jobs:
           mkdir -p shell/Assets/Plugins/Game
           dotnet run --project tools/patcher/GreyPatcher.csproj -c Release -- patch "$GDATA/Managed" /tmp/shim/GreyShim.dll shell/Assets/Plugins/Game
           mkdir -p shell/Assets/StreamingAssets/maps && cp "$GDATA"/../Maps/*.gmmap shell/Assets/StreamingAssets/maps/ 2>/dev/null || true; ls shell/Assets/StreamingAssets/maps
+          mkdir -p shell/Assets/StreamingAssets/game && find "$GDATA/StreamingAssets" -maxdepth 1 -type f -exec cp {} shell/Assets/StreamingAssets/game/ \; ; ls shell/Assets/StreamingAssets/game
 
       - name: Convert data (DX11 -> GLES3, BC -> ASTC)
         if: inputs.ref_only != 'true'
@@ -128,10 +127,6 @@ jobs:
           done
           exit $rc
 
-      - name: Install HybridCLR (mod DLL support)
-        if: inputs.skip_unity != 'true'
-        run: bash ci/hybridclr_install.sh Android
-
       - name: Unity build (APK)
         timeout-minutes: 100
         env:
@@ -148,17 +143,17 @@ jobs:
 
       - name: Upload Unity log on failure (private)
         if: failure()
-        env: {GH_TOKEN: '${{ secrets.PRIVATE_REPO_TOKEN }}'}
+        env: {GH_TOKEN: '${{ github.token }}'}
         run: |
-          [ -f unity.log ] && gzip -c unity.log > unity-android.log.gz && gh release upload src unity-android.log.gz --clobber -R ${{ env.PRIV }} || true
+          [ -f unity.log ] && gzip -c unity.log > unity-android.log.gz && gh release upload src unity-android.log.gz --clobber -R ${{ github.repository }} || true
 
       - name: Upload shell reference data (private)
-        env: {GH_TOKEN: '${{ secrets.PRIVATE_REPO_TOKEN }}'}
+        env: {GH_TOKEN: '${{ github.token }}'}
         run: |
           set -e
           rm -rf ref && mkdir ref && cd ref && unzip -q ../out/shell.apk 'assets/*' && find assets | head -60
           zip -qr ../shellref-android.zip assets && cd ..
-          gh release upload src shellref-android.zip --clobber -R ${{ env.PRIV }}
+          gh release upload src shellref-android.zip --clobber -R ${{ github.repository }}
 
       - name: Return Unity license
         if: always()
@@ -185,8 +180,8 @@ jobs:
 
       - name: Publish (private release)
         if: inputs.ref_only != 'true'
-        env: {GH_TOKEN: '${{ secrets.PRIVATE_REPO_TOKEN }}'}
+        env: {GH_TOKEN: '${{ github.token }}'}
         run: |
-          gh release view apk -R ${{ env.PRIV }} > /dev/null 2>&1 || gh release create apk -R ${{ env.PRIV }} --title "Greymeat Android" --notes "APK" --prerelease
-          gh release upload apk Greymeat.apk Greymeat-BlueStacks.apk --clobber -R ${{ env.PRIV }}
-          gh release edit apk -R ${{ env.PRIV }} --notes "Mobile port by piece89 (Discord). Run ${{ github.run_number }} (${{ github.sha }})"
+          gh release view apk -R ${{ github.repository }} > /dev/null 2>&1 || gh release create apk -R ${{ github.repository }} --title "Greymeat Android" --notes "APK" --prerelease
+          gh release upload apk Greymeat.apk Greymeat-BlueStacks.apk --clobber -R ${{ github.repository }}
+          gh release edit apk -R ${{ github.repository }} --notes "Mobile port by piece89 (Discord). Run ${{ github.run_number }} (${{ github.sha }})"

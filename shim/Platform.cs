@@ -50,6 +50,31 @@ namespace GreyShim
             return s_DataPath;
         }
 
+        /// The game's own StreamingAssets files (SurveillanceTakes.json.gz, ...) are shipped by CI in StreamingAssets/game.
+        /// The game reads them with File.*, which can't see inside the APK, so on Android they are extracted first.
+        static string s_Streaming;
+        public static string StreamingAssetsPath()
+        {
+            if (s_Streaming != null) return s_Streaming;
+            if (Application.platform != RuntimePlatform.Android)
+                return s_Streaming = System.IO.Path.Combine(Application.streamingAssetsPath, "game");
+            string dir = System.IO.Path.Combine(Application.persistentDataPath, "StreamingAssets");
+            try
+            {
+                System.IO.Directory.CreateDirectory(dir);
+                string stamp = System.IO.Path.Combine(dir, ".version"), ver = Application.version + "/" + Application.buildGUID;
+                if (!System.IO.File.Exists(stamp) || System.IO.File.ReadAllText(stamp) != ver)
+                {
+                    int n = 0;
+                    foreach (var kv in Streaming.Files("game", "")) { System.IO.File.WriteAllBytes(System.IO.Path.Combine(dir, kv.Key), kv.Value); n++; }
+                    System.IO.File.WriteAllText(stamp, ver);
+                    Debug.Log("[Greymeat] extracted " + n + " streaming asset(s)");
+                }
+            }
+            catch (Exception e) { Debug.LogWarning("[Greymeat] streaming assets not extracted: " + e.Message); }
+            return s_Streaming = dir;
+        }
+
         /// Maps shipped with the game (Greymeat/Maps, copied to StreamingAssets/maps by CI) -> persistentDataPath/Maps, once.
         public static void InstallBundledMaps()
         {
@@ -79,7 +104,7 @@ namespace GreyShim
         }
         public static void Quit(int code) => Quit();
 
-        /// Main menu "alpha V… / LEV FILIPPOV" line (Menu.MainCards): draws it, then the port credit after it in smaller text.
+        /// Main menu version line (Menu.MainCards: "alpha V… / LEV FILIPPOV" up to 1.3.5, "alpha 1.3.6" top-right since): draws it, then the port credit after it in smaller text.
         public const string PortCredit = "mobile port by piece89 (Discord)";
         static GUIStyle s_Credit;
         static GUIStyle s_CreditSrc;
@@ -103,7 +128,11 @@ namespace GreyShim
             }
             var old = GUI.color;
             GUI.color = new Color(old.r, old.g, old.b, old.a * 0.7f);
-            GUI.Label(new Rect(r.x + w + 14f, r.y + dy * 0.85f, 400f, r.height), "/   " + PortCredit, s_Credit);
+            bool right = style.alignment == TextAnchor.UpperRight || style.alignment == TextAnchor.MiddleRight || style.alignment == TextAnchor.LowerRight;
+            if (right)   // 1.3.6 home screen: version is right-aligned at the top-right, credit goes to its left
+                GUI.Label(new Rect(r.xMax - w - 14f - 500f, r.y + dy * 0.85f, 500f, r.height), PortCredit + "   /", s_Credit);
+            else
+                GUI.Label(new Rect(r.x + w + 14f, r.y + dy * 0.85f, 400f, r.height), "/   " + PortCredit, s_Credit);
             GUI.color = old;
         }
 

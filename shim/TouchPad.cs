@@ -126,21 +126,23 @@ namespace GreyShim
             m_MenuRmb = new Btn { Label = "RMB", Key = KeyCode.None, Page = -2, X = L(0.08f), Y = T(0.22f), R = sm, Kind = Kind.Toggle, On = m_MenuRmb != null && m_MenuRmb.On };
             m_Btns.Add(m_MenuRmb);
             // page 1: everything else (grid)
-            string[] labels = { "LIE", "THROW", "BUTT", "ITEM", "PICK ITEM", "HOLSTER", "LIGHT", "ROPE", "SLOW", "VIEW", "SPAWN", "REGEN", "GOD", "FLY", "ALLY", "X-RAY", "SUPPR", "SELF AIM", "CHAT", "PHOTO",
-                                "1", "2", "3", "4", "5", "6", "LOOK-", "LOOK+", "ALPHA" };
+            string[] labels = { "LIE", "THROW", "BUTT/CAR LT", "ITEM", "PICK ITEM", "HOLSTER", "LIGHT", "ROPE", "SLOW", "VIEW", "SPAWN", "REGEN", "GOD", "FLY", "ALLY", "X-RAY", "SUPPR", "SELF AIM", "CHAT", "PHOTO",
+                                "1", "2", "3", "4", "5", "6", "7 MEDIC", "MONSTER", "DART SELF", "BOLT-", "BOLT+", "CLEAN", "CLEAR", "DELETE",
+                                "DUMMY+", "NEW DUMMY", "REPLAY", "STATUS", "TUTORIAL", "LOOK-", "LOOK+", "ALPHA" };
             KeyCode[] keys = { KeyCode.LeftAlt, KeyCode.Mouse2, KeyCode.L, KeyCode.B, KeyCode.V, KeyCode.X, KeyCode.G, KeyCode.H, KeyCode.CapsLock, KeyCode.F5, KeyCode.Tab, KeyCode.Y, KeyCode.F2, KeyCode.BackQuote, KeyCode.I, KeyCode.F3, KeyCode.Z, KeyCode.J, KeyCode.T, KeyCode.F4,
-                               KeyCode.Alpha1, KeyCode.Alpha2, KeyCode.Alpha3, KeyCode.Alpha4, KeyCode.Alpha5, KeyCode.Alpha6, KeyCode.None, KeyCode.None, KeyCode.None };
-            int cols = 6;
-            float gx = s.xMin + 0.30f * h, gy = T(0.24f), step = 0.13f * h;
+                               KeyCode.Alpha1, KeyCode.Alpha2, KeyCode.Alpha3, KeyCode.Alpha4, KeyCode.Alpha5, KeyCode.Alpha6, KeyCode.Alpha7, KeyCode.F7, KeyCode.U, KeyCode.Minus, KeyCode.Equals, KeyCode.K, KeyCode.Comma, KeyCode.Delete,
+                               KeyCode.M, KeyCode.N, KeyCode.F6, KeyCode.F1, KeyCode.F8, KeyCode.None, KeyCode.None, KeyCode.None };
+            int cols = 8;
+            float gx = s.xMin + 0.26f * h, gy = T(0.24f), step = 0.12f * h;
             for (int i = 0; i < labels.Length; i++)
             {
                 float x = gx + (i % cols) * step, y = gy + (i / cols) * step;
                 Action tap = null;
-                Kind kind = labels[i] == "SELF AIM" ? Kind.Hold : Kind.Tap;
+                Kind kind = labels[i] == "SELF AIM" || labels[i] == "ALLY" ? Kind.Hold : Kind.Tap;   // ally: hold I = command wheel
                 if (labels[i] == "LOOK-") tap = () => SetLook(LookSpeed / 1.2f);
                 if (labels[i] == "LOOK+") tap = () => SetLook(LookSpeed * 1.2f);
                 if (labels[i] == "ALPHA") tap = () => { Alpha = Alpha > 0.8f ? 0.2f : Alpha + 0.2f; PlayerPrefs.SetFloat("ios_alpha", Alpha); };
-                Add(labels[i], keys[i], 1, x, y, 0.055f, kind, tap: tap);
+                Add(labels[i], keys[i], 1, x, y, 0.052f, kind, tap: tap);
             }
         }
 
@@ -280,7 +282,7 @@ namespace GreyShim
                 bool lit = b.On || m_BtnFinger.ContainsValue(b);
                 GUI.color = lit ? new Color(1f, 0.25f, 0.2f, Alpha + 0.2f) : new Color(0.08f, 0.08f, 0.08f, Alpha);
                 GUI.DrawTexture(r, m_Circle);
-                m_Style.fontSize = Mathf.RoundToInt(r.height * (b.Label.Length > 5 ? 0.17f : 0.24f));
+                m_Style.fontSize = Mathf.RoundToInt(r.height * (b.Label.Length > 8 ? 0.13f : b.Label.Length > 5 ? 0.17f : 0.24f));
                 GUI.color = new Color(1, 1, 1, Mathf.Min(1f, Alpha + 0.35f));
                 GUI.Label(r, b.Label, m_Style);
             }

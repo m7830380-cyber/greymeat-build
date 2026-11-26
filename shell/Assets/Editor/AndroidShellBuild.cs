@@ -37,7 +37,7 @@ public static class AndroidShellBuild
         PlayerSettings.companyName = "Greymeat";
         PlayerSettings.productName = "Greymeat";
         PlayerSettings.SetApplicationIdentifier(Target, "com.greymeat.androidport");
-        PlayerSettings.bundleVersion = "1.3.5";
+        PlayerSettings.bundleVersion = "1.3.6";
         int.TryParse(Env("GITHUB_RUN_NUMBER") ?? "1", out int code);
         PlayerSettings.Android.bundleVersionCode = Math.Max(1, code);
         PlayerSettings.SetScriptingBackend(Target, ScriptingImplementation.IL2CPP);

@@ -99,7 +99,7 @@ static partial class Program
         var ins = main.Body.Instructions;
         for (int i = 0; i < ins.Count; i++)
         {
-            if (ins[i].OpCode != OpCodes.Ldstr || !(ins[i].Operand is string s) || !s.Contains("FILIPPOV")) continue;
+            if (ins[i].OpCode != OpCodes.Ldstr || !(ins[i].Operand is string s) || !(s.Contains("FILIPPOV") || s.StartsWith("alpha "))) continue;
             for (int j = i + 1; j < ins.Count && j < i + 8; j++)
                 if (ins[j].OpCode == OpCodes.Call && ins[j].Operand is MethodReference mr && mr.DeclaringType.FullName == "UnityEngine.GUI" &&
                     mr.Name == "Label" && Sig(mr) == "UnityEngine.Rect,System.String,UnityEngine.GUIStyle")
@@ -366,6 +366,7 @@ static partial class Program
         }
         n += RedirectStatic(c, "UnityEngine.Application", "Quit", "Platform", "Quit");
         n += RedirectStatic(c, "UnityEngine.Application", "get_dataPath", "Platform", "DataPath");
+        n += RedirectStatic(c, "UnityEngine.Application", "get_streamingAssetsPath", "Platform", "StreamingAssetsPath");
         n += RedirectStatic(c, "UnityEngine.Application", "set_targetFrameRate", "Platform", "SetTargetFrameRate");
         n += RedirectStatic(c, "UnityEngine.QualitySettings", "set_vSyncCount", "Platform", "SetVSyncCount");
         return n;
