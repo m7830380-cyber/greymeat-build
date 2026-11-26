@@ -68,7 +68,7 @@ jobs:
           rm -rf /tmp/run && cp -r /tmp/pkg/Greymeat-L4T /tmp/run && cd /tmp/run
           Xvfb :99 -screen 0 1280x720x24 & XPID=$!
           sleep 2
-          export DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 SDL_VIDEODRIVER=x11
+          export DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 SDL_VIDEODRIVER=x11 SDL_AUDIODRIVER=dummy
           ./Greymeat.sh > run.txt 2>&1 & GPID=$!
           T=${{ inputs.smoke_seconds }}
           for s in $(seq 30 30 $T); do

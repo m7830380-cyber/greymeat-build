@@ -10,6 +10,7 @@ if ldd ./unityloader | grep -q "not found"; then
   export LD_LIBRARY_PATH="$PWD/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
   ldd ./unityloader | grep "not found" && echo "missing libraries above: sudo apt install libsdl2-2.0-0 libzip-dev libbsd0"
 fi
-export SDL_VIDEO_X11_FORCE_EGL=1
+# X11 (L4T desktop): make SDL create an EGL (not GLX) GLES context, Unity talks EGL
+export SDL_VIDEO_X11_FORCE_EGL=1 BOGO_SDL_ATTRS_FIRST=1
 exec > >(tee log.txt) 2>&1
 exec ./unityloader game.toml
