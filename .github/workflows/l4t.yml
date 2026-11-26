@@ -27,6 +27,7 @@ jobs:
           set -e
           git clone -q --recursive "$BOGODROID_REPO" /tmp/bogo
           cd /tmp/bogo && git checkout -q "$BOGODROID_REF" && git submodule update -q --init --recursive
+          git apply "$GITHUB_WORKSPACE"/ci/l4t/bogodroid-*.patch   # our fixes (dladdr for guest libraries)
           git log -1 --format="bogodroid %h %cd %s"
           ./build.sh
           ls -l build-arm64/unityloader && file build-arm64/unityloader

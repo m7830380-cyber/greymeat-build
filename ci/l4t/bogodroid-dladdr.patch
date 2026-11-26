@@ -1,0 +1,52 @@
+diff --git a/thunks/libc/misc.cpp b/thunks/libc/misc.cpp
+index 9b49751..a45232b 100755
+--- a/thunks/libc/misc.cpp
++++ b/thunks/libc/misc.cpp
+@@ -225,11 +225,44 @@ extern "C" ABI_ATTR int dlclose_impl(void* handle)
+     return 0;
+ }
+ 
++// Addresses inside the guest libraries resolve to the module that maps them (IL2CPP reads its own ELF header
++// through dli_fbase for exception stack traces; a null base crashed Unity 6 games on their first logged exception).
++// Anything else goes to the host's dladdr. bionic and glibc share the Dl_info layout.
+ extern "C" ABI_ATTR int dladdr_impl(const void* addr, Dl_info* info)
+ {
+-    /* THIS IS TERRIBLE LOL */
+-    WARN_STUB
+-    return 0;
++    uintptr_t a = (uintptr_t)addr;
++    for (const so_module* m = so_get_head(); m != NULL; m = m->next) {
++        if (!m->ehdr || !m->phdr || !m->base)
++            continue;
++        uintptr_t hi = m->base;
++        for (int i = 0; i < m->ehdr->e_phnum; i++)
++            if (m->phdr[i].p_type == PT_LOAD && m->phdr[i].p_vaddr + m->phdr[i].p_memsz > hi)
++                hi = m->phdr[i].p_vaddr + m->phdr[i].p_memsz;
++        if (a < (uintptr_t)m->base || a >= hi)
++            continue;
++        if (!info)
++            return 1;
++        info->dli_fname = m->path ? m->path : (m->soname ? m->soname : "");
++        info->dli_fbase = (void*)m->base;
++        info->dli_sname = NULL;
++        info->dli_saddr = NULL;
++        if (m->dynsym && m->dynstr) {
++            uintptr_t best = 0;
++            for (int i = 0; i < m->num_dynsym; i++) {
++                const Elf_Sym* sym = &m->dynsym[i];
++                if (sym->st_value == 0 || sym->st_shndx == SHN_UNDEF)
++                    continue;
++                uintptr_t sa = (uintptr_t)m->base + sym->st_value;
++                if (sa > a || sa < best || (sym->st_size && a >= sa + sym->st_size))
++                    continue;
++                best = sa;
++                info->dli_sname = m->dynstr + sym->st_name;
++                info->dli_saddr = (void*)sa;
++            }
++        }
++        return 1;
++    }
++    return dladdr(addr, info);
+ }
+ 
+ extern "C" ABI_ATTR void* dlsym_impl(void* handle, const char* name)
